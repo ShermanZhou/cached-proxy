@@ -45,6 +45,8 @@ func main() {
 
 	router := httprouter.New()
 	router.GET("/*path", handleAll(*upstreamHost, CachePath, *cacheWrite))
+	router.POST("/*path", handleAll(*upstreamHost, CachePath, *cacheWrite))
+	router.PUT("/*path", handleAll(*upstreamHost, CachePath, *cacheWrite))
 
 	logInfo.Printf("listening on %s\n", *listen)
 	logErr.Fatalln(http.ListenAndServe(*listen, router))
