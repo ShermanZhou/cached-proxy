@@ -82,16 +82,29 @@ func handleAll(upstreamHost string, cachePath string, cacheWrite bool) httproute
 		// turning compression off, so cached data is actually readable.
 		upReq.Header.Set("Accept-Encoding", "deflate")
 		// call upstream server (host)
-		upRes, err := client.Do(upReq)
-		if err != nil {
+		upRes, upReqErr := client.Do(upReq)
+
+		defer func() {
+			if upReqErr == nil {
+				upRes.Body.Close()
+			}
+		}()
+		// when request to host io error or status 'not ok'
+		if upReqErr != nil || !isSuccessStatus(upRes) {
 			// first use cache file, if cache file doesn't exist, send origin error back.
 			cacheFile := makeCacheFilePath(cachePath, r.URL.Path, false)
 			cachedPayload, cacheLoadError := ioutil.ReadFile(cacheFile)
 			cachedHeader, cachedHeaderError := ioutil.ReadFile(makeCacheFilePath(cachePath, r.URL.Path, true))
 			if cacheLoadError != nil {
 				// return none cached original error
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
+				if upReqErr != nil {
+					// no cache, return original IO error.
+					w.WriteHeader(500)
+					w.Write([]byte(upReqErr.Error()))
+				} else {
+					// no cache, pipe over original api failure
+					io.Copy(w, upRes.Body)
+				}
 				return
 			}
 			logInfo.Printf("return cached data for path %q\n", r.URL.Path)
@@ -110,7 +123,6 @@ func handleAll(upstreamHost string, cachePath string, cacheWrite bool) httproute
 			w.Write(cachedPayload)
 			return
 		}
-		defer upRes.Body.Close()
 
 		payload, err := ioutil.ReadAll(upRes.Body)
 		// write proxy response to both downstream and cache file
@@ -164,4 +176,8 @@ func httpHeaderFromString(content []byte) (http.Header, error) {
 	header := make(http.Header)
 	err := json.Unmarshal(content, &header)
 	return header, err
+}
+
+func isSuccessStatus(res *http.Response) bool {
+	return res.StatusCode >= 200 && res.StatusCode < 300
 }
