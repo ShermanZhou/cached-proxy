@@ -79,6 +79,8 @@ func handleAll(upstreamHost string, cachePath string, cacheWrite bool) httproute
 			}
 		}
 		client := &http.Client{}
+		// turning compression off, so cached data is actually readable.
+		upReq.Header.Set("Accept-Encoding", "deflate")
 		// call upstream server (host)
 		upRes, err := client.Do(upReq)
 		if err != nil {
